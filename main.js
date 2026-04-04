@@ -1,84 +1,153 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-const pdfUrl = 'modul'; 
+const pdfUrl = 'modul'; // Gunakan .dat agar aman dari IDM
 let pdfDoc = null;
 let pageFlip = null;
-let currentZoom = 1.0; 
 const renderedPages = new Set();
 
-// --- 1. LOGIKA UKURAN & ZOOM ---
+// Deteksi apakah layar dalam mode portrait / smartphone
+function isPortraitMode() {
+    return window.innerHeight > window.innerWidth || window.innerWidth < 768;
+}
+
+// 1. Hitung Ukuran Pas di Layar
 function getOptimalSize() {
-    const ratio = 0.707; 
-    let availableHeight = window.innerHeight * 0.80 * currentZoom;
-    let finalHeight = availableHeight;
-    let finalWidth = finalHeight * ratio;
+    const ratio = 0.707; // Rasio standar A4
+    const portrait = isPortraitMode();
 
-    return {
-        width: Math.floor(finalWidth),
-        height: Math.floor(finalHeight)
-    };
-}
+    // Beri ruang sekitar 120px untuk toolbar di bawah agar tidak tumpang tindih
+    let availableHeight = window.innerHeight - 120;
+    let availableWidth = window.innerWidth * 0.95;
 
-function changeZoom(delta) {
-    currentZoom = Math.min(Math.max(currentZoom + delta, 0.5), 2.0); // Batas zoom 50% - 200%
-    updateView();
-}
+    if (portrait) {
+        // Mode portrait: tampilkan 1 halaman saja, manfaatkan lebar layar penuh
+        let finalWidth = availableWidth;
+        let finalHeight = finalWidth / ratio;
 
-function updateView() {
-    if (pageFlip) {
-        const size = getOptimalSize();
-        pageFlip.update({
-            width: size.width,
-            height: size.height
-        });
-    }
-}
-
-// --- 2. FITUR GO TO PAGE ---
-function goToPage() {
-    const val = parseInt(document.getElementById('pageInput').value);
-    if (val > 0 && val <= pdfDoc.numPages) {
-        pageFlip.turnToPage(val - 1);
-    } else {
-        alert("Halaman tidak ditemukan");
-    }
-}
-
-// --- 3. FITUR SEARCH TEXT (Jump to Page) ---
-async function performSearch() {
-    const query = document.getElementById('searchInput').value.toLowerCase();
-    if (!query) return;
-
-    let found = false;
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const textContent = await page.getTextContent();
-        const strings = textContent.items.map(item => item.str).join(" ");
-        
-        if (strings.toLowerCase().includes(query)) {
-            pageFlip.turnToPage(i - 1);
-            found = true;
-            break; // Berhenti di hasil pertama yang ditemukan
+        // Pastikan tidak melebihi tinggi layar
+        if (finalHeight > availableHeight) {
+            finalHeight = availableHeight;
+            finalWidth = finalHeight * ratio;
         }
+
+        return {
+            width: Math.floor(finalWidth),
+            height: Math.floor(finalHeight)
+        };
+    } else {
+        // Mode landscape: tampilkan 2 halaman berdampingan
+        availableWidth = window.innerWidth * 0.90;
+
+        let finalHeight = availableHeight;
+        let finalWidth = finalHeight * ratio;
+
+        // Pastikan 2 halaman muat secara horizontal
+        if (finalWidth * 2 > availableWidth) {
+            finalWidth = availableWidth / 2;
+            finalHeight = finalWidth / ratio;
+        }
+
+        return {
+            width: Math.floor(finalWidth),
+            height: Math.floor(finalHeight)
+        };
     }
-    if (!found) alert("Teks tidak ditemukan dalam dokumen.");
 }
 
-// --- 4. CORE ENGINE (REMAINDER) ---
+// 2. Navigasi Halaman
+function goToPage() {
+    const pageNum = parseInt(document.getElementById('pageInput').value);
+    if (pageNum > 0 && pageNum <= pdfDoc.numPages) {
+        pageFlip.turnToPage(pageNum - 1);
+    } else {
+        alert("Halaman tidak valid!");
+    }
+}
+
+// 3. Render Canvas (Lazy Load)
 async function renderPage(pageNum) {
     if (renderedPages.has(pageNum)) return;
     renderedPages.add(pageNum);
+
     const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 2.5 }); 
+    const viewport = page.getViewport({ scale: 2.0 });
+
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     canvas.height = viewport.height;
     canvas.width = viewport.width;
+
     await page.render({ canvasContext: context, viewport: viewport }).promise;
+
     const wrapper = document.querySelector(`.page-wrapper[data-page="${pageNum}"]`);
-    if (wrapper) { wrapper.innerHTML = ''; wrapper.appendChild(canvas); }
+    if (wrapper) {
+        wrapper.innerHTML = '';
+        wrapper.appendChild(canvas);
+    }
 }
 
+// 4. Rebuild flipbook (digunakan saat orientasi berubah)
+function rebuildFlipbook() {
+    if (!pdfDoc) return;
+
+    // Simpan halaman saat ini
+    const currentPage = pageFlip ? pageFlip.getCurrentPageIndex() : 0;
+
+    // Destroy instance lama
+    if (pageFlip) {
+        pageFlip.destroy();
+        pageFlip = null;
+    }
+
+    const flipbookElement = document.getElementById('flipbook-viewport');
+    flipbookElement.innerHTML = '';
+
+    // Buat ulang page wrapper
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const div = document.createElement('div');
+        div.className = 'page-wrapper';
+        div.setAttribute('data-page', i);
+        flipbookElement.appendChild(div);
+    }
+
+    // Reset rendered pages agar di-render ulang
+    renderedPages.clear();
+
+    const size = getOptimalSize();
+    const portrait = isPortraitMode();
+
+    pageFlip = new St.PageFlip(flipbookElement, {
+        width: size.width,
+        height: size.height,
+        size: "stretch",
+        showCover: true,
+        usePortrait: portrait, // true = 1 halaman di portrait, false = 2 halaman di landscape
+        maxShadowOpacity: 0.5
+    });
+
+    pageFlip.loadFromHTML(document.querySelectorAll('.page-wrapper'));
+
+    // Render halaman di sekitar posisi saat ini
+    const start = Math.max(1, currentPage);
+    for (let i = start; i <= Math.min(start + 4, pdfDoc.numPages); i++) {
+        renderPage(i);
+    }
+
+    // Kembali ke halaman yang sedang dibaca
+    if (currentPage > 0) {
+        pageFlip.turnToPage(currentPage);
+    }
+
+    // Lazy load saat membalik halaman
+    pageFlip.on('flip', (e) => {
+        const current = e.data + 1;
+        [current, current + 1, current + 2, current + 3].forEach(p => {
+            if (p <= pdfDoc.numPages) renderPage(p);
+        });
+    });
+}
+
+// 5. Inisialisasi pertama kali
 async function initFlipbook() {
     try {
         const response = await fetch(pdfUrl);
@@ -89,36 +158,39 @@ async function initFlipbook() {
         const flipbookElement = document.getElementById('flipbook-viewport');
         flipbookElement.style.display = 'block';
 
-        for (let i = 1; i <= pdfDoc.numPages; i++) {
-            const div = document.createElement('div');
-            div.className = 'page-wrapper';
-            div.setAttribute('data-page', i);
-            flipbookElement.appendChild(div);
-        }
+        rebuildFlipbook();
 
-        const size = getOptimalSize();
-        pageFlip = new St.PageFlip(flipbookElement, {
-            width: size.width, height: size.height,
-            size: "stretch", showCover: true, usePortrait: false, maxShadowOpacity: 0.5
-        });
-
-        pageFlip.loadFromHTML(document.querySelectorAll('.page-wrapper'));
-        for (let i = 1; i <= Math.min(4, pdfDoc.numPages); i++) renderPage(i);
-
-        pageFlip.on('flip', (e) => {
-            const current = e.data + 1;
-            [current, current+1, current+2, current+3].forEach(p => {
-                if (p <= pdfDoc.numPages) renderPage(p);
-            });
-        });
-
-    } catch (e) { console.error(e); }
+    } catch (err) {
+        console.error(err);
+        document.getElementById('main-loader').innerText = "Gagal memuat file.";
+    }
 }
 
 function toggleFullScreen() {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-    else document.exitFullscreen();
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
 }
 
-window.addEventListener('resize', updateView);
+// Track orientasi untuk mendeteksi perubahan portrait <-> landscape
+let wasPortrait = isPortraitMode();
+
+window.addEventListener('resize', () => {
+    if (!pageFlip) return;
+
+    const nowPortrait = isPortraitMode();
+
+    if (nowPortrait !== wasPortrait) {
+        // Orientasi berubah → rebuild flipbook sepenuhnya
+        wasPortrait = nowPortrait;
+        rebuildFlipbook();
+    } else {
+        // Hanya resize biasa → update ukuran saja
+        const size = getOptimalSize();
+        pageFlip.update({ width: size.width, height: size.height });
+    }
+});
+
 initFlipbook();
