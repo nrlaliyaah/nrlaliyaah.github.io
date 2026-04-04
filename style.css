@@ -10,33 +10,32 @@ html, body {
     width: 100vw; height: 100vh;
     display: flex; flex-direction: column;
     justify-content: center; align-items: center;
-    position: relative;
 }
 
 .toolbar {
-    position: absolute; top: 20px; z-index: 1000;
-    display: flex; gap: 10px;
-    background: rgba(0, 0, 0, 0.5);
-    padding: 10px; border-radius: 20px;
+    position: absolute; top: 15px; z-index: 1000;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 15px; border-radius: 10px;
+    backdrop-filter: blur(5px);
 }
+
+.separator { width: 1px; height: 20px; background: #555; margin: 0 5px; }
 
 .btn {
     background: white; color: #333; border: none;
-    padding: 8px 15px; cursor: pointer;
-    border-radius: 15px; font-size: 12px; font-weight: bold;
-    text-decoration: none;
+    padding: 6px 12px; cursor: pointer;
+    border-radius: 5px; font-size: 12px; font-weight: bold;
 }
 
-#flipbook-viewport {
-    box-shadow: 0 0 50px rgba(0,0,0,0.8);
-    display: none;
+input {
+    background: #333; color: white; border: 1px solid #555;
+    padding: 5px; border-radius: 5px; font-size: 12px; width: 60px;
 }
 
+#searchInput { width: 100px; }
+
+#flipbook-viewport { box-shadow: 0 0 50px rgba(0,0,0,0.8); display: none; }
 .page-wrapper { background-color: white; }
-
-canvas {
-    width: 100% !important; height: 100% !important;
-    display: block;
-}
-
+canvas { width: 100% !important; height: 100% !important; display: block; }
 #main-loader { color: white; }
