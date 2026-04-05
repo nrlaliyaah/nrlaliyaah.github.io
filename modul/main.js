@@ -7,7 +7,16 @@ const renderedPages = new Set();
 
 // Deteksi apakah layar dalam mode portrait / smartphone
 function isPortraitMode() {
-    return window.innerHeight > window.innerWidth || window.innerWidth < 768;
+    return getViewportHeight() > window.innerWidth || window.innerWidth < 768;
+}
+
+// Gunakan visualViewport untuk mendapatkan tinggi layar yang BENAR-BENAR terlihat
+function getViewportHeight() {
+    // visualViewport.height mengecualikan address bar & tombol navigasi browser
+    if (window.visualViewport) {
+        return window.visualViewport.height;
+    }
+    return window.innerHeight;
 }
 
 // 1. Hitung Ukuran Pas di Layar
@@ -15,8 +24,8 @@ function getOptimalSize() {
     const ratio = 0.707; // Rasio standar A4
     const portrait = isPortraitMode();
 
-    // Beri ruang sekitar 120px untuk toolbar di bawah agar tidak tumpang tindih
-    let availableHeight = window.innerHeight - 120;
+    // Gunakan viewport yang benar-benar terlihat, bukan window.innerHeight
+    let availableHeight = getViewportHeight() - 100;
     let availableWidth = window.innerWidth * 0.95;
 
     if (portrait) {
@@ -179,21 +188,33 @@ function toggleFullScreen() {
 
 // Track orientasi untuk mendeteksi perubahan portrait <-> landscape
 let wasPortrait = isPortraitMode();
+let resizeTimer = null;
 
-window.addEventListener('resize', () => {
+function handleResize() {
     if (!pageFlip) return;
 
-    const nowPortrait = isPortraitMode();
+    // Debounce agar tidak rebuild terlalu sering
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        const nowPortrait = isPortraitMode();
 
-    if (nowPortrait !== wasPortrait) {
-        // Orientasi berubah → rebuild flipbook sepenuhnya
-        wasPortrait = nowPortrait;
-        rebuildFlipbook();
-    } else {
-        // Hanya resize biasa → update ukuran saja
-        const size = getOptimalSize();
-        pageFlip.update({ width: size.width, height: size.height });
-    }
-});
+        if (nowPortrait !== wasPortrait) {
+            // Orientasi berubah → rebuild flipbook sepenuhnya
+            wasPortrait = nowPortrait;
+            rebuildFlipbook();
+        } else {
+            // Hanya resize biasa → update ukuran saja
+            const size = getOptimalSize();
+            pageFlip.update({ width: size.width, height: size.height });
+        }
+    }, 150);
+}
+
+window.addEventListener('resize', handleResize);
+
+// visualViewport resize — dipicu saat address bar muncul/hilang di mobile
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleResize);
+}
 
 initFlipbook();
