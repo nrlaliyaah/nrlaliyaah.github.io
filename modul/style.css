@@ -1,19 +1,21 @@
+:root {
+    --app-height: 100vh; /* Akan di-override oleh JavaScript */
+}
+
 html,
 body {
     margin: 0;
     padding: 0;
     width: 100%;
-    height: 100%;
-    height: 100dvh; /* Dynamic viewport height — mengecualikan address bar & nav bar */
+    height: var(--app-height);
     overflow: hidden;
     background-color: #1a1a1a;
     font-family: 'Segoe UI', Arial, sans-serif;
 }
 
 #canvas-container {
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh; /* Fallback: 100vh untuk browser lama, 100dvh untuk modern */
+    width: 100%;
+    height: var(--app-height);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -21,21 +23,20 @@ body {
     position: relative;
 }
 
-/* Toolbar Bawah */
+/* Toolbar Bawah — posisi berbasis persentase */
 .toolbar {
     position: absolute;
-    bottom: 15px;
-    bottom: calc(15px + env(safe-area-inset-bottom)); /* Untuk iPhone dengan gesture bar */
+    bottom: 2%; /* Persentase dari tinggi container, bukan pixel */
     z-index: 1000;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     background: rgba(0, 0, 0, 0.75);
-    padding: 10px 20px;
+    padding: 8px 16px;
     border-radius: 12px;
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 90vw;
+    max-width: 90%;
     flex-wrap: wrap;
     justify-content: center;
 }
