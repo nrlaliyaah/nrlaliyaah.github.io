@@ -12,12 +12,21 @@ function isPortraitMode() {
 
 // Gunakan visualViewport untuk mendapatkan tinggi layar yang BENAR-BENAR terlihat
 function getViewportHeight() {
-    // visualViewport.height mengecualikan address bar & tombol navigasi browser
     if (window.visualViewport) {
         return window.visualViewport.height;
     }
     return window.innerHeight;
 }
+
+// Set CSS variable --app-height berdasarkan viewport yang benar-benar terlihat
+// Ini SATU-SATUNYA sumber kebenaran untuk tinggi layar
+function setAppHeight() {
+    const h = getViewportHeight();
+    document.documentElement.style.setProperty('--app-height', h + 'px');
+}
+
+// Panggil segera saat load
+setAppHeight();
 
 // 1. Hitung Ukuran Pas di Layar
 function getOptimalSize() {
@@ -191,6 +200,9 @@ let wasPortrait = isPortraitMode();
 let resizeTimer = null;
 
 function handleResize() {
+    // Selalu update tinggi container terlebih dahulu
+    setAppHeight();
+
     if (!pageFlip) return;
 
     // Debounce agar tidak rebuild terlalu sering
